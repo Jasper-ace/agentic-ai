@@ -1,6 +1,7 @@
 import logging
 import time
 import re
+import random
 import google.generativeai as genai
 from app.config import Config
 
@@ -22,7 +23,7 @@ class GeminiService:
             system_instruction=self.system_instruction
         )
         
-    def _execute_with_retry(self, func, *args, max_retries=10, initial_backoff=5, **kwargs):
+    def _execute_with_retry(self, func, *args, max_retries=10, initial_backoff=5, max_backoff=60, **kwargs):
         """
         Executes a Gemini API call and retries on 429 / rate limits / quota exceeded errors.
         Extracts recommended retry delay from the exception message if available.
@@ -63,8 +64,9 @@ class GeminiService:
                                 pass
                                 
                     if not sleep_time:
-                        sleep_time = backoff
-                        backoff *= 2
+                        # Full jitter exponential backoff: random between 0 and min(max_backoff, backoff)
+                        sleep_time = random.uniform(0.5, min(max_backoff, backoff))
+                        backoff = min(max_backoff, backoff * 2)
                         
                     logger.warning(
                         f"Gemini API rate limit encountered. Retrying in {sleep_time:.2f}s "

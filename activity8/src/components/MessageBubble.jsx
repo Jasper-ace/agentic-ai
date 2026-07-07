@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import CodeBlock from './CodeBlock';
 
 export default function MessageBubble({ message }) {
-  const { sender, text, timestamp, file } = message;
+  const { sender, text, timestamp, file, evaluation } = message;
   const isUser = sender === 'user';
   const [showFileContent, setShowFileContent] = useState(false);
+  const [isEvalExpanded, setIsEvalExpanded] = useState(false);
 
   // Helper to parse message text into text chunks and code blocks
   const parseMessageContent = (content) => {
@@ -142,6 +143,96 @@ export default function MessageBubble({ message }) {
           })}
         </div>
         )}
+
+        {/* RAG Triad Evaluation Panel */}
+        {!isUser && evaluation && (
+          <div style={styles.evaluationContainer}>
+            <div 
+              style={styles.evaluationHeader} 
+              onClick={() => setIsEvalExpanded(!isEvalExpanded)}
+              title="Click to view details"
+            >
+              <div style={styles.evaluationHeaderLeft}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ color: 'var(--color-primary)' }}>
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                <span style={styles.evaluationTitle}>RAG Triad Quality Metrics</span>
+              </div>
+              <div style={styles.evaluationHeaderRight}>
+                <span style={styles.evaluationAverage}>
+                  Avg: {((evaluation.context_relevance.score + evaluation.groundedness.score + evaluation.answer_relevance.score) / 3 * 100).toFixed(0)}%
+                </span>
+                <svg 
+                  width="14" 
+                  height="14" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2.5" 
+                  style={{ 
+                    transform: isEvalExpanded ? 'rotate(180deg)' : 'rotate(0deg)', 
+                    transition: 'transform 0.2s ease',
+                    color: 'var(--color-text-muted)',
+                    marginLeft: '4px'
+                  }}
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+
+            {isEvalExpanded && (
+              <div style={styles.evaluationBody}>
+                {Object.entries({
+                  'Context Relevance': { ...evaluation.context_relevance, label: 'Context Relevance', desc: 'Is retrieved context relevant to query?' },
+                  'Groundedness': { ...evaluation.groundedness, label: 'Groundedness / Faithfulness', desc: 'Is response fully grounded in context?' },
+                  'Answer Relevance': { ...evaluation.answer_relevance, label: 'Answer Relevance', desc: 'Is response relevant to user query?' }
+                }).map(([key, data]) => {
+                  const scorePct = (data.score * 100).toFixed(0);
+                  let statusColor = '#ef4444'; // Red
+                  let statusBg = 'rgba(239, 68, 68, 0.1)';
+                  let statusText = 'Low';
+                  
+                  if (data.score >= 0.8) {
+                    statusColor = '#0d9488'; // Teal
+                    statusBg = 'rgba(13, 148, 136, 0.1)';
+                    statusText = 'Excellent';
+                  } else if (data.score >= 0.5) {
+                    statusColor = '#f59e0b'; // Amber
+                    statusBg = 'rgba(245, 158, 11, 0.1)';
+                    statusText = 'Fair';
+                  }
+
+                  return (
+                    <div key={key} style={styles.metricRow}>
+                      <div style={styles.metricMeta}>
+                        <div>
+                          <span style={styles.metricName}>{data.label}</span>
+                          <span style={styles.metricDesc}>{data.desc}</span>
+                        </div>
+                        <div style={styles.metricScoreWrapper}>
+                          <span style={{ ...styles.metricBadge, backgroundColor: statusBg, color: statusColor }}>
+                            {statusText}
+                          </span>
+                          <span style={{ ...styles.metricScoreValue, color: statusColor }}>
+                            {scorePct}%
+                          </span>
+                        </div>
+                      </div>
+                      <div style={styles.progressContainer}>
+                        <div style={{ ...styles.progressBar, width: `${scorePct}%`, backgroundColor: statusColor }}></div>
+                      </div>
+                      <div style={styles.metricReason}>
+                        <strong>Rationale:</strong> {data.reason}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{
           ...styles.time,
           textAlign: isUser ? 'right' : 'left',
@@ -250,5 +341,113 @@ const styles = {
   expandedContent: {
     marginTop: '8px',
     width: '100%',
+  },
+  evaluationContainer: {
+    marginTop: '12px',
+    border: '1px solid var(--color-border)',
+    borderRadius: '12px',
+    backgroundColor: 'var(--color-surface-container-low)',
+    overflow: 'hidden',
+    fontSize: '13px',
+    width: '100%',
+    boxShadow: '0 2px 8px var(--color-shadow)',
+  },
+  evaluationHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px 14px',
+    backgroundColor: 'var(--color-surface-container-high)',
+    cursor: 'pointer',
+    userSelect: 'none',
+    borderBottom: '1px solid var(--color-border)',
+    transition: 'background-color var(--transition-fast)',
+  },
+  evaluationHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  evaluationTitle: {
+    fontWeight: '600',
+    color: 'var(--color-text-main)',
+  },
+  evaluationHeaderRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  evaluationAverage: {
+    fontSize: '11px',
+    fontWeight: '600',
+    color: 'var(--color-primary)',
+    backgroundColor: 'var(--color-surface)',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    border: '1px solid var(--color-border)',
+  },
+  evaluationBody: {
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    backgroundColor: 'var(--color-surface)',
+  },
+  metricRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    paddingBottom: '10px',
+    borderBottom: '1px solid var(--color-border)',
+  },
+  metricMeta: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  metricName: {
+    fontWeight: '600',
+    color: 'var(--color-text-main)',
+    display: 'block',
+  },
+  metricDesc: {
+    fontSize: '11px',
+    color: 'var(--color-text-muted)',
+    display: 'block',
+    marginTop: '1px',
+  },
+  metricScoreWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  metricBadge: {
+    fontSize: '10px',
+    fontWeight: '600',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    textTransform: 'uppercase',
+  },
+  metricScoreValue: {
+    fontWeight: '700',
+    fontSize: '14px',
+  },
+  progressContainer: {
+    height: '6px',
+    backgroundColor: 'var(--color-surface-container-low)',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: '3px',
+    transition: 'width 0.3s ease',
+  },
+  metricReason: {
+    fontSize: '11px',
+    color: 'var(--color-text-muted)',
+    lineHeight: '1.4',
+    marginTop: '2px',
   }
 };

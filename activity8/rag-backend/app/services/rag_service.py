@@ -2,6 +2,7 @@ import logging
 from app.services.embedding_service import EmbeddingService
 from app.services.qdrant_service import QdrantService
 from app.services.gemini_service import GeminiService
+from app.services.evaluation_service import EvaluationService
 from app.utils.chunker import split_text
 from app.config import Config
 
@@ -12,6 +13,7 @@ class RagService:
         self.embedding_service = EmbeddingService()
         self.qdrant_service = QdrantService()
         self.gemini_service = GeminiService()
+        self.evaluation_service = EvaluationService()
 
     def process_and_index_document(self, filename: str, content: str) -> int:
         """
@@ -39,10 +41,10 @@ class RagService:
         )
         return upserted_count
 
-    def answer_question(self, question: str) -> str:
+    def answer_question(self, question: str) -> dict:
         """
         Answers a user question by searching relevant chunks, applying a
-        similarity threshold, building context, and querying the LLM.
+        similarity threshold, building context, querying the LLM, and evaluating the RAG Triad.
         """
         logger.info(f"Answering query: '{question}'")
         
@@ -57,7 +59,16 @@ class RagService:
         
         if not relevant_hits:
             logger.info("No documents met the similarity threshold. Returning 'I don't know.'")
-            return "I don't know."
+            response = "I don't know."
+            evaluation = {
+                "context_relevance": {"score": 0.0, "reason": "No retrieved context met the similarity threshold."},
+                "groundedness": {"score": 1.0, "reason": "The response 'I don't know.' is grounded because no context is available."},
+                "answer_relevance": {"score": 1.0, "reason": "Answering 'I don't know.' is appropriate when no information is found in documents."}
+            }
+            return {
+                "response": response,
+                "evaluation": evaluation
+            }
             
         # 4. Construct context
         context_parts = []
@@ -68,7 +79,23 @@ class RagService:
         context = "\n\n=== Context Block ===\n".join(context_parts)
         
         # 5. Call LLM
-        return self.gemini_service.generate_response(context, question)
+        response = self.gemini_service.generate_response(context, question)
+        
+        # 6. Evaluate RAG Triad
+        try:
+            evaluation = self.evaluation_service.evaluate_triad(question, context, response)
+        except Exception as e:
+            logger.error(f"Error evaluating RAG triad: {e}")
+            evaluation = {
+                "context_relevance": {"score": 0.0, "reason": f"Evaluation crashed: {str(e)}"},
+                "groundedness": {"score": 0.0, "reason": f"Evaluation crashed: {str(e)}"},
+                "answer_relevance": {"score": 0.0, "reason": f"Evaluation crashed: {str(e)}"}
+            }
+            
+        return {
+            "response": response,
+            "evaluation": evaluation
+        }
 
     def list_documents(self) -> list[dict]:
         return self.qdrant_service.list_indexed_files()

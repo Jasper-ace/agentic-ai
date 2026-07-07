@@ -21,9 +21,10 @@ def chat():
         return jsonify({"error": "Message cannot be empty"}), 400
 
     try:
-        answer = rag_service.answer_question(message)
+        result = rag_service.answer_question(message)
         return jsonify({
-            "response": answer
+            "response": result["response"],
+            "evaluation": result["evaluation"]
         }), 200
     except Exception as e:
         logger.error(f"Error in chat endpoint: {e}")

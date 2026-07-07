@@ -78,7 +78,8 @@ export default function App() {
         id: `msg-${Date.now() + 1}`,
         sender: 'ai',
         text: chatData.response,
-        timestamp: aiTimestamp
+        timestamp: aiTimestamp,
+        evaluation: chatData.evaluation
       };
 
       setMessages(prev => [...prev, aiMsg]);

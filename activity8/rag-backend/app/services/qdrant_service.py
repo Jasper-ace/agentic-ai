@@ -1,5 +1,7 @@
 import uuid
 import logging
+import time
+import random
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 from app.config import Config
@@ -11,6 +13,30 @@ class QdrantService:
         # Connect to Qdrant server
         self.client = QdrantClient(host=Config.QDRANT_HOST, port=Config.QDRANT_PORT)
         self.collection_name = Config.QDRANT_COLLECTION
+        self._wait_for_qdrant()
+
+    def _wait_for_qdrant(self, max_retries=8, initial_backoff=1.0):
+        """
+        Retries connection to Qdrant server with exponential backoff.
+        Useful when starting up the services via Docker Compose.
+        """
+        backoff = initial_backoff
+        for attempt in range(max_retries):
+            try:
+                self.client.get_collections()
+                logger.info("Successfully connected to Qdrant database.")
+                return
+            except Exception as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to connect to Qdrant after {max_retries} attempts: {e}")
+                    raise e
+                sleep_time = backoff + random.uniform(0, 0.5)
+                logger.warning(
+                    f"Qdrant connection failed. Retrying in {sleep_time:.2f}s "
+                    f"(attempt {attempt + 1}/{max_retries}). Error: {e}"
+                )
+                time.sleep(sleep_time)
+                backoff *= 2
 
     def _ensure_collection_exists(self, vector_size: int):
         """
