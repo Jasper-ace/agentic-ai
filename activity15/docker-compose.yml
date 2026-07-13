@@ -12,13 +12,13 @@ services:
 
   web-backend:
     build:
-      context: ..
+      context: .
       dockerfile: rag-backend/Dockerfile
     container_name: rag-backend
     ports:
       - "5000:5000"
     env_file:
-      - ../../.env
+      - ../.env
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
@@ -26,12 +26,12 @@ services:
     depends_on:
       - qdrant
     volumes:
-      - ./uploads:/app/agentic-ai/activity13/rag-backend/uploads
+      - ./rag-backend/uploads:/app/agentic-ai/activity13/rag-backend/uploads
     restart: unless-stopped
 
   web-frontend:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
     container_name: lumina-frontend
     ports:
